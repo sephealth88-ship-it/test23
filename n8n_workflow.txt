@@ -1,0 +1,421 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"resumeUrl\": \"{{ $execution.resumeUrl }}\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        -64
+      ],
+      "id": "70da7460-11b6-4f31-b501-d7fb28b1a351",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        -64
+      ],
+      "id": "86ba6a46-c761-489a-b6a7-4dc2b8ec3960",
+      "name": "Wait",
+      "webhookId": "REDACTED"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1328,
+        -80
+      ],
+      "id": "d8091c77-1da3-4f89-b0e6-234b848de617",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n    name: [\n      \"Aisha Tan\",\n      \"Ravi Kumar\",\n      \"Emily Chen\",\n      \"Mohamed Farouk\",\n      \"Sophie Dubois\",\n      \"Kenji Sato\"\n    ],\n    location: [\n      \"Singapore\",\n      \"Chennai, India\",\n      \"San Francisco, USA\",\n      \"Dubai, UAE\",\n      \"Paris, France\",\n      \"Tokyo, Japan\"\n    ],\n    organisation: [\n      \"EcoWave Solutions\",\n      \"TechNova Systems\",\n      \"BrightPath Education\",\n      \"GreenGrid Energy\",\n      \"ArtConnect Europe\",\n      \"NeoTech Robotics\"\n    ],\n    vessel: [\n      \"MV Horizon Star\",\n      \"SS Ocean Crest\",\n      \"MV Pacific Dawn\",\n      \"SS Emerald Wind\",\n      \"MV Aurora Spirit\",\n      \"SS Sakura Maru\"\n    ]\n  } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -64
+      ],
+      "id": "fec759e2-eedd-440f-80e0-435eacc8f583",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"resumeUrl\": \"{{ $execution.resumeUrl }}\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        144,
+        176
+      ],
+      "id": "4d86016a-e8fb-4465-8f15-a7a2427b9430",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        176
+      ],
+      "id": "0ebc1ba7-e041-4bb9-af97-dc54a6358150",
+      "name": "Wait1",
+      "webhookId": "REDACTED"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1232,
+        160
+      ],
+      "id": "e59e4e38-2d8b-4a49-9125-1d80aae271be",
+      "name": "Respond to Webhook3"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"resumeUrl\": \"{{ $execution.resumeUrl }}\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        176,
+        400
+      ],
+      "id": "8e33f352-e566-47a5-b39e-c5f16230fd44",
+      "name": "Respond to Webhook4"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        400
+      ],
+      "id": "a0d0059e-31dc-426c-9605-d2edf3c9b1d4",
+      "name": "Wait2",
+      "webhookId": "REDACTED"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1264,
+        384
+      ],
+      "id": "ad2c13c1-f849-4df6-8e0c-b548b29dca19",
+      "name": "Respond to Webhook5"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n    \n  \"status\": \"success\",\n  \"message\": \"System input completed\",\n  \"Referece\": \"54321\"\n\n  } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        400
+      ],
+      "id": "409a54c3-9744-4656-a958-cec34121af07",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n    \n  \"status\": \"success\",\n  \"message\": \"Validated\"\n\n\n  } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        176
+      ],
+      "id": "30e1d4d9-52b3-49de-a4e9-e6f06146989e",
+      "name": "code 2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "REDACTED",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -64
+      ],
+      "id": "844814af-0f1d-44d9-9205-827880610cc7",
+      "name": "Maker AI Agent",
+      "webhookId": "REDACTED"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Systeminput",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        400
+      ],
+      "id": "bbc89c4d-2047-4581-a6f3-b8c1f7e6d431",
+      "name": "System Input",
+      "webhookId": "REDACTED"
+    }
+  ],
+  "connections": {
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook1": {
+      "main": [
+        []
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook2": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "code 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook4": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code 2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Maker AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "System Input": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "f3949368b61478019ea8d938900e69f8592beb3c62b0e109fe6340ea8a5a101e"
+  }
+}
