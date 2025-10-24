@@ -8,6 +8,7 @@ import { WorkflowStatus } from './WorkflowStatus';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { AgentStatus } from '../types';
 import { EditableDataSection } from './EditableDataSection';
+import { ChevronUpIcon } from './icons/ChevronUpIcon';
 
 interface InvoiceDetailProps {
   fileInfo: { name: string; dataUrl: string };
@@ -43,6 +44,7 @@ const DataSection: React.FC<{ title: string; items: string[] }> = ({ title, item
 
 export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, extractedData, setExtractedData, workflowState, onProcessAnother, networkError, reference, onConfirmSystemInput }) => {
   const { name: fileName, dataUrl: fileDataUrl } = fileInfo;
+  const [isWorkflowCollapsed, setIsWorkflowCollapsed] = useState(false);
 
   // Interactive Canvas State
   const [transform, setTransform] = useState({ scale: 0.8, x: 0, y: 0 });
@@ -171,16 +173,33 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
         {/* Column 1: Workflow Status & Extracted Data */}
         <div className="w-full lg:w-1/3 flex flex-col">
             <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex flex-col">
-                <h3 className="font-semibold text-[#009c6d] mb-3 border-b border-gray-200 pb-2 flex-shrink-0">Workflow Status</h3>
-                <div className="space-y-4 overflow-y-auto custom-scrollbar pr-3 max-h-[calc(100vh-20rem)]">
-                    {workflowState ? (
-                        <WorkflowStatus workflowState={workflowState} onConfirmSystemInput={onConfirmSystemInput}/>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center min-h-[200px]">
-                            <SpinnerIcon className="w-12 h-12 text-[#009c6d] mb-4"/>
-                            <p className="text-gray-700 font-medium">Initializing workflow...</p>
-                        </div>
-                    )}
+                <div className="flex justify-between items-center mb-3 border-b border-gray-200 pb-2 flex-shrink-0">
+                    <h3 className="font-semibold text-[#009c6d]">Workflow Status</h3>
+                    <button
+                        onClick={() => setIsWorkflowCollapsed(!isWorkflowCollapsed)}
+                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                        aria-expanded={!isWorkflowCollapsed}
+                        aria-controls="workflow-status-content"
+                        aria-label={isWorkflowCollapsed ? "Expand workflow status" : "Collapse workflow status"}
+                    >
+                        <ChevronUpIcon className={`w-5 h-5 text-gray-600 transition-transform duration-300 ${isWorkflowCollapsed ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
+                
+                <div 
+                    id="workflow-status-content"
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${isWorkflowCollapsed ? 'max-h-0' : 'max-h-[calc(100vh-20rem)]'}`}
+                >
+                    <div className="space-y-4 overflow-y-auto custom-scrollbar pr-3">
+                        {workflowState ? (
+                            <WorkflowStatus workflowState={workflowState} onConfirmSystemInput={onConfirmSystemInput}/>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center min-h-[200px]">
+                                <SpinnerIcon className="w-12 h-12 text-[#009c6d] mb-4"/>
+                                <p className="text-gray-700 font-medium">Initializing workflow...</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             
