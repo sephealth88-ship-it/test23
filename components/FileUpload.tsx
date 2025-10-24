@@ -30,7 +30,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      if (e.dataTransfer.files && e.dataTansfer.files.length > 0) {
+      // FIX: Corrected typo from `dataTansfer` to `dataTransfer`.
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         onFileUpload(e.dataTransfer.files[0]);
         e.dataTransfer.clearData();
       }

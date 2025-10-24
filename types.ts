@@ -1,42 +1,40 @@
-export enum WorkflowStatus {
-  PENDING = 'Pending',
-  IN_PROGRESS = 'In Progress',
-  COMPLETED = 'Completed',
-  VALIDATED = 'Validated',
-  FAILED = 'Failed',
-}
-
-export enum OverallStatus {
-  PROCESSING = 'Processing',
-  COMPLETED = 'Completed',
-  FAILED = 'Failed',
-}
-
-export enum WorkflowStepName {
-  MAKER = 'Maker Agent',
-  CHECKER = 'Checker Agent',
-  SYSTEM_INPUT = 'System Input',
-}
-
 export interface ExtractedData {
-  organizations: string[];
-  individuals: string[];
-  vessels: string[];
-  locations: string[];
+  name: string[];
+  location: string[];
+  organisation: string[];
+  vessel: string[];
 }
 
-export interface WorkflowStep {
-  name: WorkflowStepName;
-  status: WorkflowStatus;
+// Fix: Add OverallStatus enum to define possible states for an invoice.
+// The values are lowercase to be consistent with status strings used elsewhere in the application.
+export enum OverallStatus {
+  COMPLETED = 'completed',
+  PROCESSING = 'processing',
+  FAILED = 'failed',
 }
 
+// Fix: Add Invoice interface to describe the structure of an invoice object.
 export interface Invoice {
   id: string;
   fileName: string;
-  fileDataUrl: string;
-  status: OverallStatus;
   uploadDate: string;
-  workflowSteps: WorkflowStep[];
-  extractedData: ExtractedData | null;
-  systemReferenceId: string | null;
+  status: OverallStatus;
+}
+
+export enum AgentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export interface AgentStatusDetail {
+  status: AgentStatus;
+  message?: string;
+}
+
+export interface WorkflowState {
+  maker: AgentStatusDetail;
+  checker: AgentStatusDetail;
+  systemInput: AgentStatusDetail;
 }

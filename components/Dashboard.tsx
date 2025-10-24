@@ -4,28 +4,26 @@ import { OverallStatus } from '../types';
 import { FileIcon } from './icons/FileIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { SpinnerIcon } from './icons/SpinnerIcon';
+import { XCircleIcon } from './icons/XCircleIcon';
 
 interface DashboardProps {
   invoices: Invoice[];
-  selectedInvoiceId: string | null;
-  onSelectInvoice: (id: string) => void;
   isOpen: boolean;
 }
 
 interface StatusIndicatorProps {
   status: OverallStatus;
-  isSelected: boolean;
 }
 
 
-const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, isSelected }) => {
+const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
   switch (status) {
     case OverallStatus.COMPLETED:
       return <CheckCircleIcon className="w-5 h-5 text-green-500" />;
     case OverallStatus.PROCESSING:
-      return <SpinnerIcon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-blue-500'}`} />;
+      return <SpinnerIcon className="w-5 h-5 text-blue-500" />;
     case OverallStatus.FAILED:
-      return <div className="w-5 h-5 text-red-500">X</div>; // Replace with an X icon if needed
+      return <XCircleIcon className="w-5 h-5 text-red-500" />;
     default:
       return null;
   }
@@ -33,49 +31,44 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, isSelected })
 
 export const Dashboard: React.FC<DashboardProps> = ({
   invoices,
-  selectedInvoiceId,
-  onSelectInvoice,
   isOpen,
 }) => {
   return (
     <aside
       className={`flex-shrink-0 bg-white border-r border-gray-200/80 transition-all duration-300 ease-in-out ${
-        isOpen ? 'w-1/3 max-w-sm' : 'w-0 border-r-0'
+        isOpen ? 'w-full max-w-sm md:w-1/3' : 'w-0 border-r-0'
       }`}
     >
       <div
-        className={`h-full w-full overflow-y-auto p-4 transition-opacity duration-200 ${
+        className={`h-full flex flex-col transition-opacity duration-200 ${
           isOpen ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <h2 className="text-lg font-semibold text-gray-800 mb-4 px-2 whitespace-nowrap">
-          Processed Documents
-        </h2>
-        <div className="space-y-2">
+        <div className="p-4 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-gray-800 px-2 whitespace-nowrap">
+            Processed Documents
+          </h2>
+        </div>
+        <div className="flex-grow overflow-y-auto custom-scrollbar p-4 pt-0 space-y-2">
           {invoices.length === 0 ? (
             <p className="text-center text-gray-500 mt-8 px-2">
-              Upload a document to get started.
+              No documents processed yet.
             </p>
           ) : (
             invoices.map(invoice => (
-              <button
+              <div
                 key={invoice.id}
-                onClick={() => onSelectInvoice(invoice.id)}
-                className={`w-full text-left p-3 rounded-lg transition-colors duration-200 flex items-center gap-4 ${
-                  selectedInvoiceId === invoice.id
-                    ? 'bg-[#009c6d] text-white'
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
+                className="w-full text-left p-3 rounded-lg flex items-center gap-4 bg-gray-50 border border-gray-200/80"
               >
-                <FileIcon className={`w-6 h-6 flex-shrink-0 ${selectedInvoiceId === invoice.id ? 'text-white/80' : 'text-gray-400'}`} />
+                <FileIcon className="w-6 h-6 flex-shrink-0 text-gray-400" />
                 <div className="flex-1 overflow-hidden">
-                  <p className={`font-medium truncate text-sm ${selectedInvoiceId === invoice.id ? 'text-white' : 'text-gray-800'}`}>
+                  <p className="font-medium truncate text-sm text-gray-800">
                     {invoice.fileName}
                   </p>
-                  <p className={`text-xs ${selectedInvoiceId === invoice.id ? 'text-white/70' : 'text-gray-500'}`}>{invoice.uploadDate}</p>
+                  <p className="text-xs text-gray-500">{invoice.uploadDate}</p>
                 </div>
-                <StatusIndicator status={invoice.status} isSelected={selectedInvoiceId === invoice.id} />
-              </button>
+                <StatusIndicator status={invoice.status} />
+              </div>
             ))
           )}
         </div>

@@ -1,175 +1,293 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
-import { Dashboard } from './components/Dashboard';
 import { InvoiceDetail } from './components/InvoiceDetail';
 import { FileUpload } from './components/FileUpload';
-import type { Invoice, ExtractedData } from './types';
-import { OverallStatus, WorkflowStatus, WorkflowStepName } from './types';
+import { WorkflowStarter } from './components/WorkflowStarter';
+import type { ExtractedData, Invoice, WorkflowState } from './types';
+import { CorsErrorAlert } from './components/CorsErrorAlert';
+import { N8N_WEBHOOK_URL, N8N_CHECKER_URL, N8N_SYSTEM_INPUT_URL } from './config';
+import { Dashboard } from './components/Dashboard';
+import { OverallStatus, AgentStatus } from './types';
+
+type Phase = 'idle' | 'started' | 'processing' | 'completed' | 'failed';
 
 const App: React.FC = () => {
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [resumeUrl, setResumeUrl] = useState<string | null>(null);
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
+  const [fileInfo, setFileInfo] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [networkError, setNetworkError] = useState<React.ReactNode | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(true);
+  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
+  const [reference, setReference] = useState<string | null>(null);
 
-  const handleFileUpload = useCallback((file: File) => {
+  useEffect(() => {
+    try {
+      const storedInvoices = localStorage.getItem('invoices');
+      if (storedInvoices) {
+        setInvoices(JSON.parse(storedInvoices));
+      }
+    } catch (error) {
+      console.error("Failed to load invoices from local storage:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('invoices', JSON.stringify(invoices));
+    } catch (error) {
+      console.error("Failed to save invoices to local storage:", error);
+    }
+  }, [invoices]);
+
+  const handleStartWorkflow = useCallback(async () => {
+    setIsStarting(true);
+    setNetworkError(null);
+    try {
+      const initialResponse = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: '',
+      });
+
+      if (!initialResponse.ok) throw new Error(`Initial webhook call failed. Status: ${initialResponse.status}`);
+      const { resumeUrl } = await initialResponse.json();
+      if (!resumeUrl) throw new Error('Resume URL not found in initial response.');
+
+      setResumeUrl(resumeUrl);
+      setPhase('started');
+    } catch (error) {
+      console.error('Workflow start failed:', error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        setNetworkError(<CorsErrorAlert onDismiss={() => setNetworkError(null)} context="start" />);
+      }
+      setPhase('failed');
+    } finally {
+      setIsStarting(false);
+    }
+  }, []);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!resumeUrl) {
+      console.error('Cannot upload file: resumeUrl is missing.');
+      return;
+    }
+    setNetworkError(null);
+    setPhase('processing');
+    
+    const initialWorkflowState: WorkflowState = {
+        maker: { status: AgentStatus.PENDING },
+        checker: { status: AgentStatus.PENDING },
+        systemInput: { status: AgentStatus.PENDING },
+    };
+    setWorkflowState(initialWorkflowState);
+
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const fileDataUrl = event.target?.result as string;
-      if (!fileDataUrl) return;
-
-      const newInvoiceId = `inv_${Date.now()}`;
-      const newInvoice: Invoice = {
-        id: newInvoiceId,
-        fileName: file.name,
-        fileDataUrl: fileDataUrl,
-        status: OverallStatus.PROCESSING,
-        uploadDate: new Date().toLocaleString(),
-        workflowSteps: [
-          { name: WorkflowStepName.MAKER, status: WorkflowStatus.PENDING },
-          { name: WorkflowStepName.CHECKER, status: WorkflowStatus.PENDING },
-          { name: WorkflowStepName.SYSTEM_INPUT, status: WorkflowStatus.PENDING },
-        ],
-        extractedData: null,
-        systemReferenceId: null,
+      if (!fileDataUrl) {
+          setPhase('failed');
+          console.error('Could not read file data.');
+          return;
       };
 
-      setInvoices(prev => [newInvoice, ...prev]);
-      setSelectedInvoiceId(newInvoiceId);
-      if (!isSidebarOpen) {
-        setIsSidebarOpen(true);
-      }
+      const currentFileInfo = { name: file.name, dataUrl: fileDataUrl };
+      setFileInfo(currentFileInfo);
 
-      // Trigger the real n8n workflow
-      runN8nWorkflow(newInvoiceId, fileDataUrl);
+      let currentExtractedData: ExtractedData | null = null;
+      const currentInvoiceId = new Date().toISOString() + Math.random();
+
+      const processingInvoice: Invoice = {
+        id: currentInvoiceId,
+        fileName: currentFileInfo.name,
+        uploadDate: new Date().toLocaleString(),
+        status: OverallStatus.PROCESSING,
+      };
+      setInvoices(prev => [processingInvoice, ...prev]);
+      
+      const updateInvoiceStatus = (status: OverallStatus) => {
+        setInvoices(prev => prev.map(inv => inv.id === currentInvoiceId ? { ...inv, status } : inv));
+      };
+      
+      let processingStateBeforeError: WorkflowState | null = null;
+
+      try {
+        // Step 1: Maker AI Agent - Extract Data
+        setWorkflowState(prev => {
+            const next = { ...prev!, maker: { status: AgentStatus.PROCESSING } };
+            processingStateBeforeError = next;
+            return next;
+        });
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadResponse = await fetch(resumeUrl, {
+          method: 'POST',
+          body: formData,
+        });
+        if (!uploadResponse.ok) throw new Error(`File upload failed. Status: ${uploadResponse.status}`);
+        const result = await uploadResponse.json();
+        const rawData = result[0] || {};
+        const extracted: ExtractedData = {
+          name: Array.isArray(rawData?.name) ? rawData.name : [],
+          location: Array.isArray(rawData?.location) ? rawData.location : [],
+          organisation: Array.isArray(rawData?.organisation) ? rawData.organisation : [],
+          vessel: Array.isArray(rawData?.vessel) ? rawData.vessel : [],
+        };
+
+        currentExtractedData = extracted;
+        setExtractedData(extracted);
+        setWorkflowState(prev => ({ ...prev!, maker: { status: AgentStatus.COMPLETED, message: 'Data extracted successfully' } }));
+
+        // Step 2: Checker AI Agent - Validate Data
+        setWorkflowState(prev => {
+            const next = { ...prev!, checker: { status: AgentStatus.PROCESSING } };
+            processingStateBeforeError = next;
+            return next;
+        });
+        const checkerResponse = await fetch(N8N_CHECKER_URL, { method: 'POST', body: '', headers: { 'Content-Type': 'text/plain' } });
+        if (!checkerResponse.ok) throw new Error(`Checker agent activation failed. Status: ${checkerResponse.status}`);
+        const { resumeUrl: checkerResumeUrl } = await checkerResponse.json();
+        if (!checkerResumeUrl) throw new Error('Checker agent resume URL not found.');
+        
+        console.log('Received Checker Resume URL:', checkerResumeUrl);
+
+        const checkerFormData = new FormData();
+        checkerFormData.append('data', JSON.stringify([currentExtractedData]));
+
+        const validationResponse = await fetch(checkerResumeUrl, {
+            method: 'POST',
+            body: checkerFormData
+        });
+        if (!validationResponse.ok) throw new Error(`Checker data submission failed. Status: ${validationResponse.status}`);
+        const validationResult = await validationResponse.json();
+        if (validationResult[0]?.status !== 'success') throw new Error(validationResult[0]?.message || 'Validation failed');
+        setWorkflowState(prev => ({ ...prev!, checker: { status: AgentStatus.COMPLETED, message: validationResult[0]?.message || 'Validated' } }));
+
+        // Step 3: System Input AI Agent - Record Data
+        setWorkflowState(prev => {
+            const next = { ...prev!, systemInput: { status: AgentStatus.PROCESSING } };
+            processingStateBeforeError = next;
+            return next;
+        });
+        const systemInputResponse = await fetch(N8N_SYSTEM_INPUT_URL, { method: 'POST', body: '', headers: { 'Content-Type': 'text/plain' } });
+        if (!systemInputResponse.ok) throw new Error(`System Input agent activation failed. Status: ${systemInputResponse.status}`);
+        const { resumeUrl: systemInputResumeUrl } = await systemInputResponse.json();
+        if (!systemInputResumeUrl) throw new Error('System Input agent resume URL not found.');
+
+        console.log('Received System Input Resume URL:', systemInputResumeUrl);
+
+        const systemInputFormData = new FormData();
+        systemInputFormData.append('data', JSON.stringify([currentExtractedData]));
+
+        const systemInputDataResponse = await fetch(systemInputResumeUrl, {
+            method: 'POST',
+            body: systemInputFormData
+        });
+        if (!systemInputDataResponse.ok) throw new Error(`System Input data submission failed. Status: ${systemInputDataResponse.status}`);
+        const systemInputResult = await systemInputDataResponse.json();
+        if (systemInputResult[0]?.status !== 'success') throw new Error(systemInputResult[0]?.message || 'System input failed');
+        
+        // FIX: Check for both "Reference" and the typo "Referece"
+        const referenceValue = systemInputResult[0]?.Reference || systemInputResult[0]?.Referece;
+        if (referenceValue) {
+            setReference(referenceValue);
+        }
+
+        setWorkflowState(prev => ({ ...prev!, systemInput: { status: AgentStatus.COMPLETED, message: systemInputResult[0]?.message || 'System input completed' } }));
+
+        setPhase('completed');
+        updateInvoiceStatus(OverallStatus.COMPLETED);
+
+      } catch (error: any) {
+        console.error('Workflow processing failed:', error);
+        
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            let context: 'upload' | 'checker' | 'systemInput' = 'upload';
+            if (processingStateBeforeError?.checker.status === AgentStatus.PROCESSING) {
+                context = 'checker';
+            } else if (processingStateBeforeError?.systemInput.status === AgentStatus.PROCESSING) {
+                context = 'systemInput';
+            }
+            setNetworkError(<CorsErrorAlert onDismiss={() => setNetworkError(null)} context={context} />);
+        }
+
+        setPhase('failed');
+        updateInvoiceStatus(OverallStatus.FAILED);
+        setWorkflowState(prev => {
+            if (!prev) return null;
+            const newState = { ...prev };
+            const errorMessage = error.message || 'An unknown error occurred.';
+            if (newState.maker.status === AgentStatus.PROCESSING) newState.maker = { status: AgentStatus.FAILED, message: errorMessage };
+            else if (newState.checker.status === AgentStatus.PROCESSING) newState.checker = { status: AgentStatus.FAILED, message: errorMessage };
+            else if (newState.systemInput.status === AgentStatus.PROCESSING) newState.systemInput = { status: AgentStatus.FAILED, message: errorMessage };
+            return newState;
+        });
+      }
     };
     reader.readAsDataURL(file);
-  }, [isSidebarOpen]);
+  }, [resumeUrl]);
 
-  const handleUploadAnother = useCallback(() => {
-    setSelectedInvoiceId(null);
+  const handleReset = useCallback(() => {
+    setPhase('idle');
+    setResumeUrl(null);
+    setExtractedData(null);
+    setFileInfo(null);
+    setNetworkError(null);
+    setIsStarting(false);
+    setWorkflowState(null);
+    setReference(null);
   }, []);
   
-  const handleToggleSidebar = useCallback(() => {
-    setIsSidebarOpen(prev => !prev);
-  }, []);
+  const handleProcessAnother = useCallback(async () => {
+    handleReset();
+    await handleStartWorkflow();
+  }, [handleReset, handleStartWorkflow]);
 
-  const updateInvoiceState = (invoiceId: string, updates: Partial<Invoice>) => {
-    setInvoices(prev =>
-      prev.map(inv => (inv.id === invoiceId ? { ...inv, ...updates } : inv))
-    );
-  };
+  const toggleDashboard = () => setIsDashboardOpen(prev => !prev);
 
-  const updateWorkflowStep = (invoiceId: string, stepName: WorkflowStepName, status: WorkflowStatus) => {
-    setInvoices(prev =>
-      prev.map(inv => {
-        if (inv.id === invoiceId) {
-          return {
-            ...inv,
-            workflowSteps: inv.workflowSteps.map(step =>
-              step.name === stepName ? { ...step, status } : step
-            ),
-          };
-        }
-        return inv;
-      })
-    );
-  };
-  
-  const runN8nWorkflow = async (invoiceId: string, fileDataUrl: string) => {
-    // IMPORTANT: Replace these placeholder URLs with your actual n8n webhook URLs
-    const MAKER_AGENT_WEBHOOK_URL = 'https://your-n8n-instance.com/webhook/maker-agent';
-    const CHECKER_AGENT_WEBHOOK_URL = 'https://your-n8n-instance.com/webhook/checker-agent';
-    const SYSTEM_INPUT_WEBHOOK_URL = 'https://your-n8n-instance.com/webhook/system-input';
-
-    try {
-      // 1. Trigger Maker Agent
-      updateWorkflowStep(invoiceId, WorkflowStepName.MAKER, WorkflowStatus.IN_PROGRESS);
-      const makerResponse = await fetch(MAKER_AGENT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: invoices.find(inv => inv.id === invoiceId)?.fileName,
-          fileData: fileDataUrl,
-        }),
-      });
-
-      if (!makerResponse.ok) throw new Error(`Maker Agent failed: ${await makerResponse.text()}`);
-      
-      const extractedData: ExtractedData = await makerResponse.json();
-      updateWorkflowStep(invoiceId, WorkflowStepName.MAKER, WorkflowStatus.COMPLETED);
-      updateInvoiceState(invoiceId, { extractedData });
-
-      // 2. Trigger Checker Agent
-      updateWorkflowStep(invoiceId, WorkflowStepName.CHECKER, WorkflowStatus.IN_PROGRESS);
-      const checkerResponse = await fetch(CHECKER_AGENT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ extractedData }),
-      });
-
-      if (!checkerResponse.ok) throw new Error(`Checker Agent failed: ${await checkerResponse.text()}`);
-      
-      const validationResult = await checkerResponse.json();
-      if (!validationResult.validated) throw new Error('Checker Agent validation failed');
-      updateWorkflowStep(invoiceId, WorkflowStepName.CHECKER, WorkflowStatus.VALIDATED);
-
-      // 3. Trigger System Input Agent
-      updateWorkflowStep(invoiceId, WorkflowStepName.SYSTEM_INPUT, WorkflowStatus.IN_PROGRESS);
-      const systemInputResponse = await fetch(SYSTEM_INPUT_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ validatedData: extractedData }),
-      });
-      
-      if (!systemInputResponse.ok) throw new Error(`System Input Agent failed: ${await systemInputResponse.text()}`);
-      
-      const systemResult = await systemInputResponse.json();
-      updateWorkflowStep(invoiceId, WorkflowStepName.SYSTEM_INPUT, WorkflowStatus.COMPLETED);
-      updateInvoiceState(invoiceId, { 
-        status: OverallStatus.COMPLETED,
-        systemReferenceId: systemResult.systemReferenceId,
-      });
-
-    } catch (error) {
-      console.error('Workflow failed:', error);
-      // Update UI to show a failed state
-      setInvoices(prev =>
-        prev.map(inv => {
-          if (inv.id === invoiceId) {
-            return {
-              ...inv,
-              status: OverallStatus.FAILED,
-              workflowSteps: inv.workflowSteps.map(step => 
-                step.status === WorkflowStatus.IN_PROGRESS ? { ...step, status: WorkflowStatus.FAILED } : step
-              ),
-            };
-          }
-          return inv;
-        })
-      );
+  const renderContent = () => {
+    switch (phase) {
+      case 'idle':
+      case 'failed': // Allow retrying from failed state
+        return (
+          <>
+            {networkError && <div className="max-w-4xl mx-auto">{networkError}</div>}
+            <WorkflowStarter onStart={handleStartWorkflow} isLoading={isStarting} />
+          </>
+        );
+      case 'started':
+        return <FileUpload onFileUpload={handleFileUpload} />;
+      case 'processing':
+      case 'completed':
+        if (!fileInfo) return <p>Loading...</p>; // Should not happen
+        return (
+          <InvoiceDetail 
+            fileInfo={fileInfo}
+            status={phase}
+            extractedData={extractedData}
+            workflowState={workflowState}
+            onProcessAnother={handleProcessAnother}
+            networkError={networkError}
+            reference={reference}
+          />
+        );
+      default:
+        return null;
     }
   };
 
-  const selectedInvoice = invoices.find(inv => inv.id === selectedInvoiceId);
-
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      <Header onToggleSidebar={handleToggleSidebar} isSidebarOpen={isSidebarOpen} />
-      <main className="flex h-[calc(100vh-4rem)]">
-        <Dashboard
-          isOpen={isSidebarOpen}
-          invoices={invoices}
-          selectedInvoiceId={selectedInvoiceId}
-          onSelectInvoice={setSelectedInvoiceId}
-        />
-        <div className="flex-1 p-6 lg:p-8 overflow-y-auto bg-gray-100/50">
-          {selectedInvoice ? (
-            <InvoiceDetail invoice={selectedInvoice} onUploadAnother={handleUploadAnother} />
-          ) : (
-            <FileUpload onFileUpload={handleFileUpload} />
-          )}
-        </div>
-      </main>
+    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+      <Dashboard invoices={invoices} isOpen={isDashboardOpen} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header onToggleDashboard={toggleDashboard} />
+        <main className="p-6 lg:p-8 flex-1 overflow-y-auto">
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 };
