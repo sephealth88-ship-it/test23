@@ -22,6 +22,8 @@ const App: React.FC = () => {
   const [isDashboardOpen, setIsDashboardOpen] = useState(true);
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [reference, setReference] = useState<string | null>(null);
+  const [waitForReview, setWaitForReview] = useState(false);
+  const [currentInvoiceId, setCurrentInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -69,6 +71,66 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleSystemInput = useCallback(async (invoiceIdParam?: string, dataParam?: ExtractedData) => {
+    const invoiceId = invoiceIdParam || currentInvoiceId;
+    const data = dataParam || extractedData;
+
+    if (!invoiceId || !data) {
+        console.error('System input cannot proceed: missing invoice ID or data.');
+        return;
+    }
+
+    const updateInvoiceStatus = (status: OverallStatus) => {
+        setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status } : inv));
+    };
+    
+    try {
+        setWorkflowState(prev => ({ ...prev!, systemInput: { status: AgentStatus.PROCESSING } }));
+
+        const systemInputResponse = await fetch(N8N_SYSTEM_INPUT_URL, { method: 'POST', body: '', headers: { 'Content-Type': 'text/plain' } });
+        if (!systemInputResponse.ok) throw new Error(`System Input agent activation failed. Status: ${systemInputResponse.status}`);
+        const { resumeUrl: systemInputResumeUrl } = await systemInputResponse.json();
+        if (!systemInputResumeUrl) throw new Error('System Input agent resume URL not found.');
+
+        const systemInputFormData = new FormData();
+        systemInputFormData.append('data', JSON.stringify([data]));
+
+        const systemInputDataResponse = await fetch(systemInputResumeUrl, {
+            method: 'POST',
+            body: systemInputFormData
+        });
+        if (!systemInputDataResponse.ok) throw new Error(`System Input data submission failed. Status: ${systemInputDataResponse.status}`);
+        const systemInputResult = await systemInputDataResponse.json();
+        if (systemInputResult[0]?.status !== 'success') throw new Error(systemInputResult[0]?.message || 'System input failed');
+        
+        const referenceValue = systemInputResult[0]?.Reference || systemInputResult[0]?.Referece;
+        if (referenceValue) {
+            setReference(referenceValue);
+        }
+
+        setWorkflowState(prev => ({ ...prev!, systemInput: { status: AgentStatus.COMPLETED, message: systemInputResult[0]?.message || 'System input completed' } }));
+
+        setPhase('completed');
+        updateInvoiceStatus(OverallStatus.COMPLETED);
+
+    } catch (error: any) {
+        console.error('System input processing failed:', error);
+        
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            setNetworkError(<CorsErrorAlert onDismiss={() => setNetworkError(null)} context='systemInput' />);
+        }
+
+        setPhase('failed');
+        updateInvoiceStatus(OverallStatus.FAILED);
+        setWorkflowState(prev => {
+            if (!prev) return null;
+            const newState = { ...prev };
+            newState.systemInput = { status: AgentStatus.FAILED, message: error.message || 'An unknown error occurred.' };
+            return newState;
+        });
+    }
+  }, [currentInvoiceId, extractedData]);
+
   const handleFileUpload = useCallback(async (file: File) => {
     if (!resumeUrl) {
       console.error('Cannot upload file: resumeUrl is missing.');
@@ -95,12 +157,14 @@ const App: React.FC = () => {
 
       const currentFileInfo = { name: file.name, dataUrl: fileDataUrl };
       setFileInfo(currentFileInfo);
+      
+      const newInvoiceId = new Date().toISOString() + Math.random();
+      setCurrentInvoiceId(newInvoiceId);
 
       let currentExtractedData: ExtractedData | null = null;
-      const currentInvoiceId = new Date().toISOString() + Math.random();
 
       const processingInvoice: Invoice = {
-        id: currentInvoiceId,
+        id: newInvoiceId,
         fileName: currentFileInfo.name,
         uploadDate: new Date().toLocaleString(),
         status: OverallStatus.PROCESSING,
@@ -108,7 +172,7 @@ const App: React.FC = () => {
       setInvoices(prev => [processingInvoice, ...prev]);
       
       const updateInvoiceStatus = (status: OverallStatus) => {
-        setInvoices(prev => prev.map(inv => inv.id === currentInvoiceId ? { ...inv, status } : inv));
+        setInvoices(prev => prev.map(inv => inv.id === newInvoiceId ? { ...inv, status } : inv));
       };
       
       let processingStateBeforeError: WorkflowState | null = null;
@@ -152,8 +216,6 @@ const App: React.FC = () => {
         const { resumeUrl: checkerResumeUrl } = await checkerResponse.json();
         if (!checkerResumeUrl) throw new Error('Checker agent resume URL not found.');
         
-        console.log('Received Checker Resume URL:', checkerResumeUrl);
-
         const checkerFormData = new FormData();
         checkerFormData.append('data', JSON.stringify([currentExtractedData]));
 
@@ -166,40 +228,12 @@ const App: React.FC = () => {
         if (validationResult[0]?.status !== 'success') throw new Error(validationResult[0]?.message || 'Validation failed');
         setWorkflowState(prev => ({ ...prev!, checker: { status: AgentStatus.COMPLETED, message: validationResult[0]?.message || 'Validated' } }));
 
-        // Step 3: System Input AI Agent - Record Data
-        setWorkflowState(prev => {
-            const next = { ...prev!, systemInput: { status: AgentStatus.PROCESSING } };
-            processingStateBeforeError = next;
-            return next;
-        });
-        const systemInputResponse = await fetch(N8N_SYSTEM_INPUT_URL, { method: 'POST', body: '', headers: { 'Content-Type': 'text/plain' } });
-        if (!systemInputResponse.ok) throw new Error(`System Input agent activation failed. Status: ${systemInputResponse.status}`);
-        const { resumeUrl: systemInputResumeUrl } = await systemInputResponse.json();
-        if (!systemInputResumeUrl) throw new Error('System Input agent resume URL not found.');
-
-        console.log('Received System Input Resume URL:', systemInputResumeUrl);
-
-        const systemInputFormData = new FormData();
-        systemInputFormData.append('data', JSON.stringify([currentExtractedData]));
-
-        const systemInputDataResponse = await fetch(systemInputResumeUrl, {
-            method: 'POST',
-            body: systemInputFormData
-        });
-        if (!systemInputDataResponse.ok) throw new Error(`System Input data submission failed. Status: ${systemInputDataResponse.status}`);
-        const systemInputResult = await systemInputDataResponse.json();
-        if (systemInputResult[0]?.status !== 'success') throw new Error(systemInputResult[0]?.message || 'System input failed');
-        
-        // FIX: Check for both "Reference" and the typo "Referece"
-        const referenceValue = systemInputResult[0]?.Reference || systemInputResult[0]?.Referece;
-        if (referenceValue) {
-            setReference(referenceValue);
+        // Step 3: System Input AI Agent - Conditionally Pause or Proceed
+        if (waitForReview) {
+            setWorkflowState(prev => ({ ...prev!, systemInput: { status: AgentStatus.AWAITING_REVIEW, message: 'Ready for your review' } }));
+        } else {
+            await handleSystemInput(newInvoiceId, currentExtractedData);
         }
-
-        setWorkflowState(prev => ({ ...prev!, systemInput: { status: AgentStatus.COMPLETED, message: systemInputResult[0]?.message || 'System input completed' } }));
-
-        setPhase('completed');
-        updateInvoiceStatus(OverallStatus.COMPLETED);
 
       } catch (error: any) {
         console.error('Workflow processing failed:', error);
@@ -228,7 +262,7 @@ const App: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
-  }, [resumeUrl]);
+  }, [resumeUrl, waitForReview, handleSystemInput]);
 
   const handleReset = useCallback(() => {
     setPhase('idle');
@@ -239,6 +273,7 @@ const App: React.FC = () => {
     setIsStarting(false);
     setWorkflowState(null);
     setReference(null);
+    setCurrentInvoiceId(null);
   }, []);
   
   const handleProcessAnother = useCallback(async () => {
@@ -259,7 +294,11 @@ const App: React.FC = () => {
           </>
         );
       case 'started':
-        return <FileUpload onFileUpload={handleFileUpload} />;
+        return <FileUpload 
+                    onFileUpload={handleFileUpload} 
+                    waitForReview={waitForReview}
+                    setWaitForReview={setWaitForReview} 
+                />;
       case 'processing':
       case 'completed':
         if (!fileInfo) return <p>Loading...</p>; // Should not happen
@@ -268,10 +307,12 @@ const App: React.FC = () => {
             fileInfo={fileInfo}
             status={phase}
             extractedData={extractedData}
+            setExtractedData={setExtractedData}
             workflowState={workflowState}
             onProcessAnother={handleProcessAnother}
             networkError={networkError}
             reference={reference}
+            onConfirmSystemInput={handleSystemInput}
           />
         );
       default:

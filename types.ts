@@ -26,6 +26,7 @@ export enum AgentStatus {
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
+  AWAITING_REVIEW = 'awaiting_review',
 }
 
 export interface AgentStatusDetail {

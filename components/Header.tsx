@@ -1,5 +1,6 @@
 import React from 'react';
 import { MenuIcon } from './icons/MenuIcon';
+import { AgentOpsIcon } from './icons/AgentOpsIcon';
 
 interface HeaderProps {
   onToggleDashboard: () => void;
@@ -16,22 +17,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleDashboard }) => {
         <MenuIcon className="w-6 h-6 text-gray-600" />
       </button>
       <div className="flex items-center gap-3">
-        <svg
-          className="w-8 h-8 text-[#009c6d]"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-          />
-        </svg>
+        <AgentOpsIcon className="w-10 h-10 text-[#009c6d]" />
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-          AI Invoice Processor
+          AI AgentOps
         </h1>
       </div>
     </header>

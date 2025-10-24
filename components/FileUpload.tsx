@@ -3,9 +3,11 @@ import { UploadIcon } from './icons/UploadIcon';
 
 interface FileUploadProps {
   onFileUpload: (file: File) => void;
+  waitForReview: boolean;
+  setWaitForReview: (value: boolean) => void;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, waitForReview, setWaitForReview }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
@@ -71,6 +73,26 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload }) => {
         <p className="text-gray-600 mt-1">or click to browse</p>
         <p className="text-xs text-gray-500 mt-4">Supports PDF, PNG, JPG</p>
       </div>
+
+      <div className="mt-8 flex items-center justify-center">
+        <label htmlFor="review-toggle" className="flex items-center cursor-pointer select-none">
+          <div className="relative">
+            <input 
+              type="checkbox" 
+              id="review-toggle" 
+              className="sr-only peer" 
+              checked={waitForReview}
+              onChange={(e) => setWaitForReview(e.target.checked)}
+            />
+            <div className="block bg-gray-300 w-14 h-8 rounded-full peer-checked:bg-[#009c6d] transition-colors"></div>
+            <div className="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform peer-checked:translate-x-6"></div>
+          </div>
+          <div className="ml-4 text-gray-700 font-medium">
+            Wait for my review before system input
+          </div>
+        </label>
+      </div>
+
     </div>
   );
 };

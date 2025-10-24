@@ -1,5 +1,5 @@
 {
-  "name": "AI Invoice Processor",
-  "description": "An intelligent invoice processing web application that uses a simulated multi-agent workflow (Maker, Checker, System Input) to extract, validate, and record invoice data. Features a modern dashboard to track the status of all processed documents.",
+  "name": "AI AgentOps",
+  "description": "An intelligent multi-agent operations platform that uses a simulated workflow (Maker, Checker, System Input) to process documents.",
   "requestFramePermissions": []
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import type { ExtractedData, WorkflowState } from '../types';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { UploadIcon } from './icons/UploadIcon';
@@ -6,15 +6,19 @@ import { PlusIcon } from './icons/PlusIcon';
 import { MinusIcon } from './icons/MinusIcon';
 import { WorkflowStatus } from './WorkflowStatus';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { AgentStatus } from '../types';
+import { EditableDataSection } from './EditableDataSection';
 
 interface InvoiceDetailProps {
   fileInfo: { name: string; dataUrl: string };
   status: 'processing' | 'completed' | 'failed';
   extractedData: ExtractedData | null;
+  setExtractedData: (data: ExtractedData | null) => void;
   workflowState: WorkflowState | null;
   onProcessAnother: () => void;
   networkError: React.ReactNode | null;
   reference: string | null;
+  onConfirmSystemInput: () => void;
 }
 
 const DataSection: React.FC<{ title: string; items: string[] }> = ({ title, items }) => (
@@ -37,17 +41,83 @@ const DataSection: React.FC<{ title: string; items: string[] }> = ({ title, item
 );
 
 
-export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, extractedData, workflowState, onProcessAnother, networkError, reference }) => {
+export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, extractedData, setExtractedData, workflowState, onProcessAnother, networkError, reference, onConfirmSystemInput }) => {
   const { name: fileName, dataUrl: fileDataUrl } = fileInfo;
-  const [zoomLevel, setZoomLevel] = useState(0.8);
 
+  // Interactive Canvas State
+  const [transform, setTransform] = useState({ scale: 0.8, x: 0, y: 0 });
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const isPanning = useRef(false);
+  const lastPointerPosition = useRef({ x: 0, y: 0 });
+  
   const ZOOM_STEP = 0.2;
   const MIN_ZOOM = 0.2;
   const MAX_ZOOM = 3;
 
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + ZOOM_STEP, MAX_ZOOM));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - ZOOM_STEP, MIN_ZOOM));
-  const handleZoomReset = () => setZoomLevel(1);
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    isPanning.current = true;
+    lastPointerPosition.current = { x: e.clientX, y: e.clientY };
+    if (viewerRef.current) {
+      viewerRef.current.style.cursor = 'grabbing';
+      viewerRef.current.setPointerCapture(e.pointerId);
+    }
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanning.current) return;
+    const deltaX = e.clientX - lastPointerPosition.current.x;
+    const deltaY = e.clientY - lastPointerPosition.current.y;
+    lastPointerPosition.current = { x: e.clientX, y: e.clientY };
+    setTransform(prev => ({ ...prev, x: prev.x + deltaX, y: prev.y + deltaY }));
+  }, []);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    isPanning.current = false;
+    if (viewerRef.current) {
+      viewerRef.current.style.cursor = 'grab';
+      viewerRef.current.releasePointerCapture(e.pointerId);
+    }
+  }, []);
+  
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (!viewerRef.current) return;
+    
+    const rect = viewerRef.current.getBoundingClientRect();
+    const mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    
+    const delta = e.deltaY * -0.005;
+    const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, transform.scale + delta));
+    
+    const worldPos = {
+      x: (mousePos.x - transform.x) / transform.scale,
+      y: (mousePos.y - transform.y) / transform.scale,
+    };
+    
+    const newX = -worldPos.x * newScale + mousePos.x;
+    const newY = -worldPos.y * newScale + mousePos.y;
+    
+    setTransform({ scale: newScale, x: newX, y: newY });
+  }, [transform]);
+
+  const handleZoom = useCallback((direction: 'in' | 'out') => {
+    if (!viewerRef.current) return;
+    const rect = viewerRef.current.getBoundingClientRect();
+    const center = { x: rect.width / 2, y: rect.height / 2 };
+    const zoomFactor = direction === 'in' ? ZOOM_STEP : -ZOOM_STEP;
+    const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, transform.scale + zoomFactor));
+    const worldPos = {
+        x: (center.x - transform.x) / transform.scale,
+        y: (center.y - transform.y) / transform.scale,
+    };
+    const newX = -worldPos.x * newScale + center.x;
+    const newY = -worldPos.y * newScale + center.y;
+    setTransform({ scale: newScale, x: newX, y: newY });
+  }, [transform]);
+  
+  const handleZoomIn = () => handleZoom('in');
+  const handleZoomOut = () => handleZoom('out');
+  const handleZoomReset = () => setTransform({ scale: 1, x: 0, y: 0 });
 
   const getStatusColor = () => {
     switch (status) {
@@ -57,6 +127,16 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
         default: return 'text-blue-600';
     }
   }
+
+  const isReviewMode = workflowState?.systemInput.status === AgentStatus.AWAITING_REVIEW;
+
+  const handleDataChange = (category: keyof ExtractedData, newItems: string[]) => {
+    if (!extractedData) return;
+    setExtractedData({
+        ...extractedData,
+        [category]: newItems,
+    });
+  };
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -94,7 +174,7 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
                 <h3 className="font-semibold text-[#009c6d] mb-3 border-b border-gray-200 pb-2 flex-shrink-0">Workflow Status</h3>
                 <div className="space-y-4 overflow-y-auto custom-scrollbar pr-3 max-h-[calc(100vh-20rem)]">
                     {workflowState ? (
-                        <WorkflowStatus workflowState={workflowState} />
+                        <WorkflowStatus workflowState={workflowState} onConfirmSystemInput={onConfirmSystemInput}/>
                     ) : (
                         <div className="flex flex-col items-center justify-center min-h-[200px]">
                             <SpinnerIcon className="w-12 h-12 text-[#009c6d] mb-4"/>
@@ -108,10 +188,21 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex flex-col mt-8">
                     <h3 className="font-semibold text-[#009c6d] mb-3 border-b border-gray-200 pb-2 flex-shrink-0">Extracted Information</h3>
                     <div className="space-y-4 overflow-y-auto custom-scrollbar pr-3 max-h-[calc(100vh-35rem)]">
-                        <DataSection title="Name" items={extractedData.name} />
-                        <DataSection title="Location" items={extractedData.location} />
-                        <DataSection title="Organisation" items={extractedData.organisation} />
-                        <DataSection title="Vessel" items={extractedData.vessel} />
+                        {isReviewMode ? (
+                          <>
+                            <EditableDataSection title="Name" items={extractedData.name} onItemsChange={(items) => handleDataChange('name', items)} />
+                            <EditableDataSection title="Location" items={extractedData.location} onItemsChange={(items) => handleDataChange('location', items)} />
+                            <EditableDataSection title="Organisation" items={extractedData.organisation} onItemsChange={(items) => handleDataChange('organisation', items)} />
+                            <EditableDataSection title="Vessel" items={extractedData.vessel} onItemsChange={(items) => handleDataChange('vessel', items)} />
+                          </>
+                        ) : (
+                          <>
+                            <DataSection title="Name" items={extractedData.name} />
+                            <DataSection title="Location" items={extractedData.location} />
+                            <DataSection title="Organisation" items={extractedData.organisation} />
+                            <DataSection title="Vessel" items={extractedData.vessel} />
+                          </>
+                        )}
                     </div>
                   </div>
             )}
@@ -124,7 +215,7 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
                 <div className="flex items-center gap-2 text-gray-600">
                     <button
                         onClick={handleZoomOut}
-                        disabled={zoomLevel <= MIN_ZOOM}
+                        disabled={transform.scale <= MIN_ZOOM}
                         className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="Zoom out"
                     >
@@ -135,11 +226,11 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
                         className="text-sm font-semibold w-16 text-center tabular-nums bg-gray-50 hover:bg-gray-100 py-1 px-2 rounded-md transition-colors"
                         aria-label="Reset zoom"
                     >
-                        {`${Math.round(zoomLevel * 100)}%`}
+                        {`${Math.round(transform.scale * 100)}%`}
                     </button>
                     <button
                         onClick={handleZoomIn}
-                        disabled={zoomLevel >= MAX_ZOOM}
+                        disabled={transform.scale >= MAX_ZOOM}
                         className="p-1 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="Zoom in"
                     >
@@ -147,18 +238,25 @@ export const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ fileInfo, status, 
                     </button>
                 </div>
             </div>
-            <div className="h-[75vh] bg-gray-100 rounded-md flex justify-center items-center p-4">
-                <div className="overflow-auto custom-scrollbar max-w-full max-h-full">
-                    <iframe
-                        src={fileDataUrl}
-                        className="w-[800px] max-w-none h-[1131px] bg-white shadow-lg border-0 transition-transform duration-200 ease-out"
-                        title={fileName}
-                        style={{
-                            transform: `scale(${zoomLevel})`,
-                            transformOrigin: 'center',
-                        }}
-                    />
-                </div>
+            <div 
+                ref={viewerRef}
+                className="h-[75vh] bg-gray-100 rounded-md flex justify-center items-center overflow-hidden cursor-grab touch-none"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerLeave={onPointerUp}
+                onWheel={onWheel}
+            >
+                <iframe
+                    src={fileDataUrl}
+                    className="w-[800px] max-w-none h-[1131px] bg-white shadow-lg border-0 pointer-events-none select-none"
+                    title={fileName}
+                    style={{
+                        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                        transformOrigin: '0 0',
+                        transition: isPanning.current ? 'none' : 'transform 0.1s ease-out',
+                    }}
+                />
             </div>
         </div>
       </div>
